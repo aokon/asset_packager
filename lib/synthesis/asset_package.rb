@@ -76,6 +76,13 @@ module Synthesis
           asset_yml['javascripts'] = [{"base" => build_file_list("#{Rails.root}/public/javascripts", "js")}]
           asset_yml['stylesheets'] = [{"base" => build_file_list("#{Rails.root}/public/stylesheets", "css")}]
 
+          Rails.application.railties.engines.each do |e|
+            js_engine_path = "#{e.paths.path.to_s}/public/javascripts"
+            css_engine_path = "#{e.paths.path.to_s}/public/stylesheets"
+            asset_yml['javascripts'][0]['base'] += build_file_list(js_engine_path, "js") if File.directory?(js_engine_path)
+            asset_yml['stylesheets'][0]['base'] += build_file_list(css_engine_path, "css") if File.directory?(css_engine_path)
+          end
+
           File.open("#{Rails.root}/config/asset_packages.yml", "w") do |out|
             YAML.dump(asset_yml, out)
           end
@@ -135,13 +142,26 @@ module Synthesis
         end
       end
 
+      #TODO It's ugly solution try to find better
+      #TODO Should be tested for rails 2.3 series
       def merged_file
         merged_file = ""
-        @sources.each {|s| 
-          File.open("#{@asset_path}/#{s}.#{@extension}", "r") { |f| 
-            merged_file += f.read + "\n" 
-          }
-        }
+        @sources.each do |s| 
+          if File.exists? "#{@asset_path}/#{s}.#{@extension}"
+            File.open("#{@asset_path}/#{s}.#{@extension}", "r") { |f| 
+              merged_file += f.read + "\n" 
+            }
+          else
+            Rails.application.railties.engines.each do |e|
+              file_name = "#{e.paths.path}/public/#{@asset_type}/#{s}.#{@extension}"
+              if File.exists?(file_name)
+                File.open(file_name, "r") { |f| 
+                  merged_file += f.read + "\n" 
+                }
+              end
+            end
+          end
+        end
         merged_file
       end
     
